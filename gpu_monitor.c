@@ -7,6 +7,7 @@
 #include "nvml.h"
 
 int main(int argc, char *argv[]) {
+    int device_index = 0;
     nvmlReturn_t result;
     nvmlDevice_t device;
     nvmlUtilization_t utilization;
@@ -22,7 +23,13 @@ int main(int argc, char *argv[]) {
     // -h: print help
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] == '-') {
-            if (argv[i][1] == 'i') {
+            if (argv[i][1] == 'd') {
+                if (i + 1 < argc) {
+                    device_index = atoi(argv[i + 1]);
+                    i++;
+                }
+            }
+            else if (argv[i][1] == 'i') {
                 interactive = true;
             }
             else if (argv[i][1] == 't') {
@@ -56,10 +63,10 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    // Get handle for device 0 (modify if you have multiple GPUs)
-    result = nvmlDeviceGetHandleByIndex(0, &device);
+    // Get handle for selected device (default is 0)
+    result = nvmlDeviceGetHandleByIndex(device_index, &device);
     if (NVML_SUCCESS != result) {
-        fprintf(stderr, "[ERROR] Failed to get handle for device 0: %s\n", nvmlErrorString(result));
+        fprintf(stderr, "[ERROR] Failed to get handle for device %d: %s\n", device_index, nvmlErrorString(result));
         nvmlShutdown();
         return EXIT_FAILURE;
     }
