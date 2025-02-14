@@ -15,11 +15,14 @@ int main(int argc, char *argv[]) {
     bool interactive = false;
     int interval_ms = 500;
     char *output_file = NULL;
+    long max_iters = -1;
     
     // Parse command line arguments
+    // -d: device index (default is 0)
     // -i: interactive mode
-    // -t: interval in ms
+    // -t: interval in ms (default is 500)
     // -o: output file (CSV)
+    // -x: exit after set number of iterations
     // -h: print help
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] == '-') {
@@ -41,6 +44,12 @@ int main(int argc, char *argv[]) {
             else if (argv[i][1] == 'o') {
                 if (i + 1 < argc) {
                     output_file = argv[i + 1];
+                    i++;
+                }
+            }
+            else if (argv[i][1] == 'x') {
+                if (i + 1 < argc) {
+                    max_iters = atoi(argv[i + 1]);
                     i++;
                 }
             }
@@ -93,7 +102,8 @@ int main(int argc, char *argv[]) {
     }
 
     // Main loop: update on interval
-    while (1) {
+    long iter = 0;
+    while (max_iters == -1 || iter < max_iters) {
         result = nvmlDeviceGetUtilizationRates(device, &utilization);
         if (NVML_SUCCESS != result) {
             fprintf(stderr, "[ERROR] Failed to get utilization rates: %s\n", nvmlErrorString(result));
@@ -139,6 +149,8 @@ int main(int argc, char *argv[]) {
         }
 
         usleep(interval_ms * 1000);
+
+        iter++;
     }
 
     // Close output file if specified
