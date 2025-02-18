@@ -148,7 +148,10 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        usleep(interval_ms * 1000);
+// Flush the buffer
+        fflush(stdout);
+
+        usleep(config.interval_ms * 1000);
 
         iter++;
     }
