@@ -4,18 +4,44 @@
 #include <stdbool.h>
 #include <time.h>
 #include <string.h>
-#include "nvml.h"
+#include <signal.h>
+#include <nvml.h>
+
+// Struct to store configuration state
+typedef struct {
+    int device_index;
+    bool interactive;
+    int interval_ms;
+    char *output_file;
+    long max_iters;
+} Config;
+
+// Globals
+Config config = {
+    .device_index = 0,
+    .interactive = false,
+    .interval_ms = 500,
+    .output_file = NULL,
+    .max_iters = -1
+};
+
+// Signal handler for SIGINT
+void sigint_handler(int signum) {
+    // Print footer if not in interactive mode
+    if (!config.interactive) {
+        printf("_______________|_____________|\n");
+    }
+
+    printf("[INFO] Received SIGINT signal. Exiting...\n");
+    nvmlShutdown();
+    exit(0);
+}
 
 int main(int argc, char *argv[]) {
-    int device_index = 0;
     nvmlReturn_t result;
     nvmlDevice_t device;
     nvmlUtilization_t utilization;
     unsigned int powerUsage;
-    bool interactive = false;
-    int interval_ms = 500;
-    char *output_file = NULL;
-    long max_iters = -1;
     
     // Parse command line arguments
     // -d: device index (default is 0)
@@ -28,28 +54,28 @@ int main(int argc, char *argv[]) {
         if (argv[i][0] == '-') {
             if (argv[i][1] == 'd') {
                 if (i + 1 < argc) {
-                    device_index = atoi(argv[i + 1]);
+                    config.device_index = atoi(argv[i + 1]);
                     i++;
                 }
             }
             else if (argv[i][1] == 'i') {
-                interactive = true;
+                config.interactive = true;
             }
             else if (argv[i][1] == 't') {
                 if (i + 1 < argc) {
-                    interval_ms = atoi(argv[i + 1]);
+                    config.interval_ms = atoi(argv[i + 1]);
                     i++;
                 }
             }
             else if (argv[i][1] == 'o') {
                 if (i + 1 < argc) {
-                    output_file = argv[i + 1];
+                    config.output_file = argv[i + 1];
                     i++;
                 }
             }
             else if (argv[i][1] == 'x') {
                 if (i + 1 < argc) {
-                    max_iters = atoi(argv[i + 1]);
+                    config.max_iters = atoi(argv[i + 1]);
                     i++;
                 }
             }
@@ -65,6 +91,9 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // Register signal handler for SIGINT
+    signal(SIGINT, sigint_handler);
+
     // Initialize NVML
     result = nvmlInit();
     if (NVML_SUCCESS != result) {
@@ -73,15 +102,15 @@ int main(int argc, char *argv[]) {
     }
 
     // Get handle for selected device (default is 0)
-    result = nvmlDeviceGetHandleByIndex(device_index, &device);
+    result = nvmlDeviceGetHandleByIndex(config.device_index, &device);
     if (NVML_SUCCESS != result) {
-        fprintf(stderr, "[ERROR] Failed to get handle for device %d: %s\n", device_index, nvmlErrorString(result));
+        fprintf(stderr, "[ERROR] Failed to get handle for device %d: %s\n", config.device_index, nvmlErrorString(result));
         nvmlShutdown();
         return EXIT_FAILURE;
     }
     
     // If in standard (non-interactive) mode, print table header
-    if (!interactive)
+    if (!config.interactive)
     {
         printf("________________________________\n");
         printf("| SM Utilization | Power Usage |\n");
@@ -91,8 +120,8 @@ int main(int argc, char *argv[]) {
 
     // Open output file if specified
     FILE *file = NULL;
-    if (output_file) {
-        file = fopen(output_file, "w");
+    if (config.output_file) {
+        file = fopen(config.output_file, "w");
 
         // If file is empty, write header
         fseek(file, 0, SEEK_END);
@@ -103,7 +132,7 @@ int main(int argc, char *argv[]) {
 
     // Main loop: update on interval
     long iter = 0;
-    while (max_iters == -1 || iter < max_iters) {
+    while (config.max_iters == -1 || iter < config.max_iters) {
         result = nvmlDeviceGetUtilizationRates(device, &utilization);
         if (NVML_SUCCESS != result) {
             fprintf(stderr, "[ERROR] Failed to get utilization rates: %s\n", nvmlErrorString(result));
@@ -117,7 +146,7 @@ int main(int argc, char *argv[]) {
         }
 
         // Handle interactive mode
-        if (interactive) {
+        if (config.interactive) {
             // Clear the screen (ANSI escape sequence) and print header + stats.
             printf("\033[H\033[J");
            
@@ -148,7 +177,7 @@ int main(int argc, char *argv[]) {
             }
         }
 
-// Flush the buffer
+        // Flush the buffer
         fflush(stdout);
 
         usleep(config.interval_ms * 1000);
